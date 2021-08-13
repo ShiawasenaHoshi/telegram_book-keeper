@@ -1,7 +1,7 @@
 import datetime
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func, desc, and_, exists
+from sqlalchemy import func, desc, and_, exists, cast, TIME
 from sqlalchemy.sql import label
 
 from app import db
@@ -113,7 +113,8 @@ class Transaction(db.Model):
             .join(CurrencyRate, (Transaction.currency_iso == CurrencyRate.iso) & (
                 func.date_trunc('day', Transaction.timestamp) == CurrencyRate.date)) \
             .subquery()
-        res = db.session.query(subq3.c.timestamp,
+        res = db.session.query(func.DATE(subq3.c.timestamp).label('date'),
+                               cast(subq3.c.timestamp, TIME).label('time'),
                                subq3.c.converted_amount,
                                func.concat(subq3.c.amount, " ", subq3.c.currency_iso).label('amount_in_currency'),
                                subq3.c.description,
@@ -276,13 +277,13 @@ class MonthStartBalance(db.Model):
             from_date = datetime.date(year, month, 1)
         else:
             raise Exception(f"{'year' if month else 'month'} is None, but {'year' if year else 'month'} isn't None")
-        report = Transaction.summary(from_date=from_date)
+        summary = Transaction.summary(from_date=from_date)
 
         month_start_balance = MonthStartBalance.query.filter_by(year=year, month=month).first()
         if month_start_balance:
-            next_month_balance = month_start_balance.balance + report['balance']
+            next_month_balance = month_start_balance.balance + summary['balance']
         else:
-            next_month_balance = report['balance']
+            next_month_balance = summary['balance']
         to_date = from_date + relativedelta(months=1)
         next = MonthStartBalance.query.filter_by(year=to_date.year, month=to_date.month).first()
         if not next:

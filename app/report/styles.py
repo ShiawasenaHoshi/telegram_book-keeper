@@ -8,11 +8,12 @@ def num2col(col):
 
 
 def adjust_columns_size(ws):
-    ws.column_dimensions["A"].width = 20
+    ws.column_dimensions["A"].width = 15
     ws.column_dimensions["B"].width = 10
-    ws.column_dimensions["C"].width = 12
-    ws.column_dimensions["D"].width = 40
-    ws.column_dimensions["E"].width = 20
+    ws.column_dimensions["C"].width = 10
+    ws.column_dimensions["D"].width = 12
+    ws.column_dimensions["E"].width = 50
+    ws.column_dimensions["F"].width = 20
 
 
 BOLD = Font(bold=True)
