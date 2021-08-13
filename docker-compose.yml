@@ -1,0 +1,31 @@
+version: '3.3'
+
+services:
+
+  bot:
+    restart: always
+    build: .
+    working_dir: /home/bot
+    env_file: .env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+#    ports:
+#      - 8443:8443
+    depends_on:
+      - postgres
+    links:
+      - postgres
+
+  postgres:
+    restart: always
+    image: postgres:11.4
+    volumes:
+      - ./postgres/data:/var/app/data/p_db
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      PGDATA: /var/app/data/p_db
+    ports:
+      - 127.0.0.1:5432:5432
