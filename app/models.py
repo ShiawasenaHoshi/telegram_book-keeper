@@ -5,6 +5,7 @@ from sqlalchemy import func, desc, and_, exists, cast, TIME
 from sqlalchemy.sql import label
 
 from app import db
+from app.user_models import User
 
 
 def default_dates(from_date=None, to_date=None):
@@ -102,6 +103,7 @@ class Transaction(db.Model):
                                                         Transaction.timestamp < to_date).subquery()
 
         subq3 = db.session.query(Transaction.id,
+                                 Transaction.user_id,
                                  Transaction.timestamp,
                                  Transaction.category_id,
                                  Transaction.currency_iso,
@@ -115,11 +117,13 @@ class Transaction(db.Model):
             .subquery()
         res = db.session.query(func.DATE(subq3.c.timestamp).label('date'),
                                cast(subq3.c.timestamp, TIME).label('time'),
+                               User.name,
                                subq3.c.converted_amount,
                                func.concat(subq3.c.amount, " ", subq3.c.currency_iso).label('amount_in_currency'),
                                subq3.c.description,
                                func.concat(Category.utf_icon, " ", Category.description).label('cat_title')) \
             .join(Category, subq3.c.category_id == Category.id) \
+            .join(User, subq3.c.user_id == User.id) \
             .order_by(subq3.c.timestamp) \
             .all()
 

@@ -32,6 +32,7 @@ class InitDB():
             if not User.query.filter_by(id=Config.TG_ADMIN_ID).first():
                 a = User()
                 a.id = Config.TG_ADMIN_ID
+                a.name = "superadmin"
                 a.access_level = ACCESS_LEVEL.ADMIN
                 self.db.session.add(a)
         return self

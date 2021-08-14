@@ -32,7 +32,7 @@ class DBCase(unittest.TestCase):
         self.app_context.pop()
 
     def test_basic(self):
-        u1 = User.add(1, ACCESS_LEVEL.USER)
+        u1 = User.add(1, "user1", ACCESS_LEVEL.USER)
         msg_id = 1
         Transaction.add(datetime.datetime.now(), 100, "usd", u1.id, msg_id, "test tx", 1)
         tx = Transaction.remove_by_msg(u1.id, 1)
@@ -41,7 +41,7 @@ class DBCase(unittest.TestCase):
         self.assertIsNone(tx)
 
     def generate_tx_users(self, year, month, iso):
-        u1 = User.add(1, ACCESS_LEVEL.USER)
+        u1 = User.add(1, "user1", ACCESS_LEVEL.USER)
         msg_id = 1
         from_date = datetime.datetime(year, month, 1, 0, 0, 0)
         to_date = from_date + relativedelta(months=1)

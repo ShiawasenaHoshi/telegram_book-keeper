@@ -13,7 +13,7 @@ from config import Config
 def generate_report(data, sheet_name="Выписка"):
     wb = Workbook()
     del wb["Sheet"]
-    titles = ["Дата", "Время", "Сумма", "В валюте", "Описание", "Категория"]
+    titles = ["Дата", "Время", "Пользователь", "Сумма", "В валюте", "Описание", "Категория"]
     ws = wb.create_sheet(sheet_name)
     adjust_columns_size(ws)
     append_header(ws, titles)
