@@ -29,7 +29,7 @@ class BookKeepingCmd(Cmd):
 
             for cat in cats:
                 result[tx_lambda(cat.id)] = (cat.short_name, f"{cat.utf_icon} {cat.description}", ACCESS_LEVEL.USER)
-            result[self.summary] = ("summary", "📊 Отчет", ACCESS_LEVEL.MANAGER)
+            result[self.summary] = ("summary", "📊 Отчет", ACCESS_LEVEL.USER)
             result[self.set_currency_rate] = ("set_currency_rate", "💵 💶 Курс", ACCESS_LEVEL.ADMIN)
             result[self.set_default_currency] = ("set_default_currency", "🔧 Уст. валюту", ACCESS_LEVEL.ADMIN)
             return result
@@ -163,11 +163,10 @@ class BookKeepingCmd(Cmd):
                 self.bot.reply_to(msg, f"Транзакция записана\n{expenses_text}",
                                   reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
                 self.l.info(f"Uid_{msg.from_user.id} has sended data: {msg.text}")
-                # Thread(target=self.fetch_currency_rate, args=(currency_iso,)).start()
             except Exception as e:
                 self.l.info(e)
                 self.bot.send_message(msg.chat.id, f"Что-то пошло не так. Повторите ввод. (Ошибка: {e})")
-                self.bot.register_next_step_handler(msg, lambda msg: self.waiting_for_data_transaction(msg, cat_id))
+                self.bot.register_next_step_handler(msg, lambda msg: self.waiting_for_data_transaction(msg, cat_id, summary))
         else:
             self.bot.clear_step_handler_by_chat_id(chat_id=msg.chat.id)
             self.bot.send_message(msg.chat.id,

@@ -18,11 +18,11 @@ class GenericCmd(Cmd):
         self.help(msg)
 
     def help(self, msg):
-        help_msg = "Здравствуйте! Я есть казна-бот."
+        help_msg = "Здравствуйте! Я бот для учета расходов/доходов."
         self.bot.send_message(msg.chat.id, help_msg, reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
 
     def change_access_level(self, msg):
-        msg = self.bot.send_message(msg.chat.id, 'Какой новый уровень доступа? 1 - админ, 2 - менеджер, 3 - работник',
+        msg = self.bot.send_message(msg.chat.id, 'Какой новый уровень доступа? 1 - админ, 2 - пользователь',
                                     reply_markup=self.markup_back_to_menu)
 
         self.bot.register_next_step_handler(msg, self.waiting_new_access_level)

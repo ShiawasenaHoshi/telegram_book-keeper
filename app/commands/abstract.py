@@ -70,10 +70,6 @@ class Cmd():
                 continue
             if access_level == ACCESS_LEVEL.USER:
                 keyboards[ACCESS_LEVEL.USER].append(ru)
-                keyboards[ACCESS_LEVEL.MANAGER].append(ru)
-                keyboards[ACCESS_LEVEL.ADMIN].append(ru)
-            elif access_level == ACCESS_LEVEL.MANAGER:
-                keyboards[ACCESS_LEVEL.MANAGER].append(ru)
                 keyboards[ACCESS_LEVEL.ADMIN].append(ru)
             else:
                 keyboards[ACCESS_LEVEL.ADMIN].append(ru)

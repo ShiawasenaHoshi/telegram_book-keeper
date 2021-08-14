@@ -34,7 +34,7 @@ def create_app(config_class=Config):
 
             from app.user_models import ACCESS_LEVEL, User
             with app.app_context():
-                User.add(config_class.TG_ADMIN_ID, ACCESS_LEVEL.ADMIN)
+                User.add(config_class.TG_ADMIN_ID, ACCESS_LEVEL.ADMIN, "superadmin")
             from app.bot import Bot
             Bot(Config.TG_TOKEN, Config.TG_ADMIN_ID, app).start()
         elif config_class.TESTING:

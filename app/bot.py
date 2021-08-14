@@ -6,6 +6,7 @@ import telebot
 
 from app.commands.book_keeping import BookKeepingCmd
 from app.commands.main import GenericCmd
+from app.commands.users import UserCmd
 from config import Config
 
 import traceback
@@ -74,6 +75,7 @@ class Bot(threading.Thread):
     @staticmethod
     def init_commands(bot, app, logger, admin_uid):
         gc = GenericCmd(bot, app, logger, admin_uid)
+        uc = UserCmd(bot, app, logger, admin_uid)
         bc = BookKeepingCmd(bot, app, logger, admin_uid)
         bc.month_start_balance_check()
 
