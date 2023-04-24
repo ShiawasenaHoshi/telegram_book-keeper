@@ -7,9 +7,10 @@ import telebot
 from app.commands.book_keeping import BookKeepingCmd
 from app.commands.main import GenericCmd
 from app.commands.users import UserCmd
+from app.commands.abstract import Cmd
 from config import Config
 
-import traceback
+
 class Bot(threading.Thread):
 
     def __init__(self, tg_token, admin_id, app):
@@ -64,8 +65,12 @@ class Bot(threading.Thread):
                     Bot.init_commands(self.bot, app, self.l, self.admin)
                     self.bot.polling(none_stop=True, interval=Config.BOT_INTERVAL, timeout=Config.BOT_TIMEOUT)
                 except Exception as ex:  # Error in polling
-                    self.l.error("Bot polling failed, restarting in {}sec. Error:\n{}".format(Config.BOT_TIMEOUT, ex), exc_info=True)
+                    self.l.error("Bot polling failed, restarting in {}sec. Error:\n{}".format(Config.BOT_TIMEOUT, ex),
+                                 exc_info=True)
                     self.bot.stop_polling()
+                    Cmd.finalize()
+                    import schedule
+                    schedule.clear()
                     time.sleep(Config.BOT_TIMEOUT)
                 else:  # Clean exit
                     self.bot.stop_polling()
@@ -77,6 +82,7 @@ class Bot(threading.Thread):
         gc = GenericCmd(bot, app, logger, admin_uid)
         uc = UserCmd(bot, app, logger, admin_uid)
         bc = BookKeepingCmd(bot, app, logger, admin_uid)
+        time.sleep(5)  # short delay to prevent possible db errors
         bc.month_start_balance_check()
 
         FETCH_CURRENCIES_TIME = "10:00"

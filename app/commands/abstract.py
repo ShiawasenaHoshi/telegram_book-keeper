@@ -4,11 +4,7 @@ from collections import defaultdict
 
 from telebot import types
 
-from app.generic import chunkify_by_size
 from app.user_models import ACCESS_LEVEL, User
-
-
-
 
 
 class Cmd():
@@ -20,6 +16,16 @@ class Cmd():
     admin = None
     ctx = None
     change_access_level_cmd = "change_access_level"
+
+    @staticmethod
+    def finalize():
+        Cmd.func_btn_map = {
+
+        }
+        _re_set = set()
+        Cmd.keyboards = defaultdict(list)
+        Cmd.admin = None
+        Cmd.ctx = None
 
     @abstractmethod
     def dict_of_methods(self):
@@ -43,11 +49,9 @@ class Cmd():
         self.add_handlers(bot)
 
         bot.add_message_handler(bot_handler_dict(self.back_to_menu_btn_pushed, Cmd.re_back_to_menu,
-                                                  lambda msg: Cmd.is_allowed(msg, ACCESS_LEVEL.USER)))
+                                                 lambda msg: Cmd.is_allowed(msg, ACCESS_LEVEL.USER)))
 
-
-
-    #---------ALL HANDLERS INITIALIZATION------
+    # ---------ALL HANDLERS INITIALIZATION------
 
     @staticmethod
     def get_keyboard(access_level):
@@ -77,7 +81,8 @@ class Cmd():
     def add_handlers(self, bot):
         for method, params in Cmd.func_btn_map.items():
             en, ru, access_level = params
-            bot.add_message_handler(bot_handler_dict(method, self._regex(method), Cmd._access_level_lambda(access_level)))
+            bot.add_message_handler(
+                bot_handler_dict(method, self._regex(method), Cmd._access_level_lambda(access_level)))
 
     def _regex(self, func):
         if not self.func_btn_map:
@@ -92,7 +97,7 @@ class Cmd():
     def _access_level_lambda(access_level):
         return lambda msg: Cmd.is_allowed(msg, access_level)
 
-    #------ACCESS LEVELS AND GENERATE MARKUP FOR EACH LEVEL----------
+    # ------ACCESS LEVELS AND GENERATE MARKUP FOR EACH LEVEL----------
 
     @staticmethod
     def get_markup_for_access_level(access_level):
@@ -127,7 +132,7 @@ class Cmd():
             else:
                 return user.access_level.value <= minimal_access_level.value
 
-    #------------BACK BUTTON AND UNEXPECTED COMMANDS HANDLER-----------
+    # ------------BACK BUTTON AND UNEXPECTED COMMANDS HANDLER-----------
 
     ru_back_to_menu = "❌ В меню"
     re_back_to_menu = f"^(/reset|{ru_back_to_menu})$"
@@ -162,7 +167,10 @@ def bot_handler_dict(function, regexp, func, commands=None, content_types=None):
                         'func': func,
                         'content_types': content_types}}
 
+
 TRY_AGAIN = 0
+
+
 def input_method(smth=None):
     def actual_decorator(func):
         def wrapper(*args, **kwargs):
@@ -170,7 +178,8 @@ def input_method(smth=None):
             bot = cmd.bot
             log = cmd.l
             msg = args[1]
-
+            log.info(
+                f"\nFunction: {cmd.__class__.__name__}.{func.__name__}()\nUserId: {msg.from_user.id}\nText: {msg.text}")
             if cmd.back_to_menu_btn_pushed(msg):
                 return
 
@@ -194,3 +203,6 @@ def input_method(smth=None):
         return wrapper
 
     return actual_decorator
+
+def chunkify_by_size(list, size):
+    return [list[i * size:(i + 1) * size] for i in range((len(list) + size - 1) // size)]

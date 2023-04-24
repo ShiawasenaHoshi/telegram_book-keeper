@@ -74,4 +74,5 @@ def cells_from_data(ws, row, last_row=False):
 def append_multiline(ws, data):
     while len(data) > 1:
         ws.append(cells_from_data(ws, data.pop(0)))
-    ws.append(cells_from_data(ws, data.pop(0), last_row=True))
+    if len(data) >= 1:
+        ws.append(cells_from_data(ws, data.pop(0), last_row=True))

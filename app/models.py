@@ -1,11 +1,12 @@
 import datetime
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func, desc, and_, exists, cast, TIME
+from sqlalchemy import func, desc, and_, exists, cast, TIME, select
 from sqlalchemy.sql import label
 
 from app import db
 from app.user_models import User
+from config import Config
 
 
 def default_dates(from_date=None, to_date=None):
@@ -75,6 +76,10 @@ class Transaction(db.Model):
         return tx
 
     @staticmethod
+    def get_by_msg(user_id, msg_id):
+        return Transaction.query.filter_by(user_id=user_id, msg_id=msg_id).first()
+
+    @staticmethod
     def tx_summary(category_id):
         today = datetime.date.today()
         month_start, month_end = default_dates(datetime.date(today.year, today.month, 1))
@@ -99,10 +104,10 @@ class Transaction(db.Model):
     @staticmethod
     def report(from_date=None, to_date=None):
         from_date, to_date = default_dates(from_date, to_date)
-        subq1 = db.session.query(Transaction.id).filter(Transaction.timestamp >= from_date,
-                                                        Transaction.timestamp < to_date).subquery()
+        subq1 = select(Transaction.id).where(Transaction.timestamp >= from_date,
+                                                        Transaction.timestamp < to_date)
 
-        subq3 = db.session.query(Transaction.id,
+        subq3 = select(Transaction.id,
                                  Transaction.user_id,
                                  Transaction.timestamp,
                                  Transaction.category_id,
@@ -111,9 +116,9 @@ class Transaction(db.Model):
                                  Transaction.amount,
                                  CurrencyRate.rate,
                                  label('converted_amount', Transaction.amount * CurrencyRate.rate)) \
-            .filter(Transaction.id.in_(subq1)) \
+            .where(Transaction.id.in_(subq1)) \
             .join(CurrencyRate, (Transaction.currency_iso == CurrencyRate.iso) & (
-                func.date_trunc('day', Transaction.timestamp) == CurrencyRate.date)) \
+                func.date_trunc('day', Transaction.timestamp) == CurrencyRate.date))\
             .subquery()
         res = db.session.query(func.DATE(subq3.c.timestamp).label('date'),
                                cast(subq3.c.timestamp, TIME).label('time'),
@@ -133,22 +138,22 @@ class Transaction(db.Model):
     def summary(from_date=None, to_date=None):
         from_date, to_date = default_dates(from_date, to_date)
 
-        subq1 = db.session.query(Transaction.id).filter(Transaction.timestamp >= from_date,
-                                                        Transaction.timestamp < to_date).subquery()
+        subq1 = select(Transaction.id).where(Transaction.timestamp >= from_date,
+                                                        Transaction.timestamp < to_date)
 
-        subq2 = db.session.query(Transaction.id,
+        subq2 = select(Transaction.id,
                                  Transaction.category_id,
                                  Transaction.currency_iso,
                                  Transaction.amount,
                                  CurrencyRate.rate,
                                  label('converted_amount', Transaction.amount * CurrencyRate.rate)) \
-            .filter(Transaction.id.in_(subq1)) \
+            .where(Transaction.id.in_(subq1)) \
             .join(CurrencyRate, (Transaction.currency_iso == CurrencyRate.iso) & (
-                func.date_trunc('day', Transaction.timestamp) == CurrencyRate.date)) \
+                func.date_trunc('day', Transaction.timestamp) == CurrencyRate.date))\
             .subquery()
-        subq3 = db.session.query(subq2.c.category_id, func.sum(subq2.c.converted_amount).label('sum')) \
+        subq3 = select(subq2.c.category_id, func.sum(subq2.c.converted_amount).label('sum')) \
             .group_by(subq2.c.category_id) \
-            .order_by(desc("sum")) \
+            .order_by(desc("sum"))\
             .subquery()
         total = db.session.query(subq3.c.category_id, Category.description, Category.utf_icon, subq3.c.sum) \
             .join(Category, subq3.c.category_id == Category.id) \
@@ -225,13 +230,13 @@ class CurrencyRate(db.Model):
 
     @staticmethod
     def set(iso, rate, date=None):
-        # todo check existence
-        cr = CurrencyRate()
-        cr.iso = iso
-        cr.date = date if date else datetime.date.today()
-        cr.rate = rate
-        db.session.add(cr)
-        db.session.commit()
+        if not CurrencyRate.get(iso, date):
+            cr = CurrencyRate()
+            cr.iso = iso
+            cr.date = date if date else datetime.date.today()
+            cr.rate = rate
+            db.session.add(cr)
+            db.session.commit()
 
     @staticmethod
     def get(iso, date=None):
@@ -243,11 +248,11 @@ class CurrencyRate(db.Model):
     @staticmethod
     def get_not_existed_rates_for_dates(from_date=None, to_date=None):
         from_date, to_date = default_dates(from_date, to_date)
-        subq1 = db.session.query(
+        subq1 = select(
             Transaction.currency_iso,
             label('tx_date', func.date_trunc('day', Transaction.timestamp))
         ) \
-            .filter(Transaction.timestamp >= from_date, Transaction.timestamp < to_date).subquery()
+            .where(Transaction.timestamp >= from_date, Transaction.timestamp < to_date).subquery()
         subq2 = db.session.query(subq1.c.currency_iso, subq1.c.tx_date) \
             .distinct(subq1.c.currency_iso, subq1.c.tx_date).subquery()
         result = db.session.query(subq2.c.currency_iso, subq2.c.tx_date) \
@@ -326,3 +331,90 @@ class Category(db.Model):
     @staticmethod
     def get(id):
         return Category.query.filter_by(id=id).first()
+
+
+class Receipt(db.Model):
+    tx_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), primary_key=True)
+    file_number = db.Column(db.SmallInteger, primary_key=True)
+    msg_id = db.Column(db.Integer, nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_receipt_msg_id', msg_id),
+    )
+
+    def __init__(self, tx_id, msg_id, file_number):
+        self.tx_id = tx_id
+        self.file_number = file_number
+        self.msg_id = msg_id
+
+    def filename(self):
+        tx = Transaction.query.filter_by(id=self.tx_id).first()
+        return Receipt._filename(tx.user_id, tx.message_id, self.file_number)
+
+    @staticmethod
+    def _filename(user_id, message_id, file_number):
+        return f"{user_id}_{message_id}_{file_number}"
+
+    @staticmethod
+    def add_from_msg(log, bot, msg):
+        tx_user_id = msg.reply_to_message.chat.id
+        tx_msg_id = msg.reply_to_message.id
+        image_msg_id = msg.id
+        tx = Transaction.get_by_msg(tx_user_id, tx_msg_id)
+        if tx:
+            if msg.document:
+                file_info = bot.get_file(msg.document.file_id)
+                original_file_name = msg.document.file_name
+            else:
+                file_info = bot.get_file(msg.photo[1].file_id)
+                original_file_name = file_info.file_path.replace("/", "_")
+            file_id = file_info.file_id
+            log.info(
+                '{0} {1} {2} downloading'.format(msg.message_id, file_id, original_file_name))
+
+            import pathlib
+            file_extension = pathlib.Path(file_info.file_path).suffix
+            file_number = Receipt.last_file_number(tx.id) + 1
+            file_name_with_extension = f"{Receipt._filename(tx.user_id, tx.msg_id, file_number)}{file_extension.lower()}"
+            downloaded_file = bot.download_file(file_info.file_path)
+            local_path = Config.RECEIPTS_FOLDER / file_name_with_extension
+            with open(local_path, 'w+b') as new_file:
+                new_file.write(downloaded_file)
+                r = Receipt.add(tx.id, image_msg_id, file_number)
+                log.info(f"{file_name_with_extension} saved")
+                return r
+        else:
+            raise Exception(f"Transaction {tx_msg_id} for uid {tx_user_id} does not exist")
+
+
+    @staticmethod
+    def add(tx_id, image_msg_id, file_number=None):
+        if not file_number:
+            last_number = Receipt.last_file_number(tx_id)
+            file_number = last_number + 1
+        r = Receipt(tx_id, image_msg_id, file_number)
+        db.session.add(r)
+        db.session.commit()
+        return r
+
+    @staticmethod
+    def last_file_number(tx_id):
+        receipts = Receipt.get_by_tx(tx_id)
+        if receipts:
+            return receipts[-1].file_number
+        else:
+            return 0
+
+    @staticmethod
+    def remove_all_by_tx(tx_id):
+        receipts = Receipt.get_by_tx(tx_id)
+        for receipt in receipts:
+            pass
+            #todo remove from storage
+            #todo remove from telegram
+        return db.session.filter(Receipt.tx_id == tx_id).delete()
+
+
+    @staticmethod
+    def get_by_tx(tx_id):
+        return Receipt.query.filter_by(tx_id=tx_id).order_by("file_number").all()

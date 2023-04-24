@@ -6,8 +6,8 @@ from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
-
 from config import Config
+
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -20,6 +20,7 @@ def create_app(config_class=Config):
 
         db.init_app(app)
         migrate.init_app(app, db)
+        config_class.RECEIPTS_FOLDER.mkdir(parents=True, exist_ok=True)
         with app.app_context():
             if not config_class.DB_INTERACT and not config_class.TESTING :
                 from flask_migrate import upgrade as _upgrade
@@ -27,6 +28,8 @@ def create_app(config_class=Config):
                 from app.init_db_objects import InitDB
                 InitDB(app).init_all()
 
+        from app.api_client import ExchangeRates
+        ExchangeRates.init(Config.MAIN_CURRENCY)
         app.logger.setLevel(logging.INFO)
         if (len(sys.argv) > 1 and sys.argv[1] == 'db'):
             return app
@@ -35,6 +38,7 @@ def create_app(config_class=Config):
             from app.user_models import ACCESS_LEVEL, User
             with app.app_context():
                 User.add(config_class.TG_ADMIN_ID, ACCESS_LEVEL.ADMIN, "superadmin")
+
             from app.bot import Bot
             Bot(Config.TG_TOKEN, Config.TG_ADMIN_ID, app).start()
         elif config_class.TESTING:

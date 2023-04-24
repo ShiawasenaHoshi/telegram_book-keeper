@@ -9,6 +9,7 @@ services:
     env_file: .env
     volumes:
       - /etc/localtime:/etc/localtime:ro
+      - ./receipts:/home/bot/receipts
 #    ports:
 #      - 8443:8443
     depends_on:

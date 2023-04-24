@@ -10,6 +10,12 @@ class TestBot():
         # self.register_next_step_handler_by_chat_id(chat_id, callback, *args, **kwargs)
         pass
 
+    def send_photo(self, user_id, file, caption):
+        # todo implement
+        # chat_id = message.chat.id
+        # self.register_next_step_handler_by_chat_id(chat_id, callback, *args, **kwargs)
+        pass
+
     def add_message_handler(self, handler_dict):
         self.message_handlers.append(handler_dict)
 

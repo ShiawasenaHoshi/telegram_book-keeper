@@ -2,6 +2,7 @@ import datetime
 
 from flask_sqlalchemy import SQLAlchemy
 
+
 from app.models import Category, Currency, CurrencyRate
 from app.user_models import User, ACCESS_LEVEL
 from config import Config
@@ -67,23 +68,19 @@ class InitDB():
 
     def init_currencies(self):
         with self.app.app_context():
-            currencies = {
-                "rub": 1,
-                "idr": 5.5,
-                "usd": 73,
-                "eur": 88.5,
-                "gel": 23.5
-            }
+            from app.api_client import ExchangeRates
+            ExchangeRates.init("")
+            ExchangeRates.get("eur","usd") #load
             currencies_db = Currency.get_all()
             if len(currencies_db) == 0:
-                for iso, rate in currencies.items():
+                for iso, rate in ExchangeRates._instance.rates_cache.items():
                     c = Currency()
-                    c.iso = iso
-                    if iso == "rub":
+                    c.iso = iso.lower()
+                    if iso.lower() == Config.MAIN_CURRENCY:
                         c.default = True
                     self.db.session.add(c)
                     cr = CurrencyRate()
-                    cr.iso = iso
+                    cr.iso = iso.lower()
                     cr.date = datetime.date.today()
                     cr.rate = rate
 

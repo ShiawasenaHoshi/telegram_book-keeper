@@ -1,7 +1,10 @@
 import os
 import tempfile
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, '.env'))
@@ -41,4 +44,8 @@ class Config(object):
     WEBHOOK_URL_BASE = os.environ.get('WEBHOOK_URL_BASE') or "https://%s:%s" % (WEBHOOK_HOST, WEBHOOK_PORT)
     WEBHOOK_URL_PATH = os.environ.get('WEBHOOK_URL_PATH') or "/%s/" % (TG_TOKEN)
 
+    MAIN_CURRENCY = os.environ.get('MAIN_CURRENCY') or 'eur'
+
     TEMP_FOLDER = tempfile.gettempdir()
+
+    RECEIPTS_FOLDER = Path("receipts")

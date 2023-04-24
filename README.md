@@ -3,7 +3,7 @@ Convenient book-keeping telegram bot.
 - support multicurrency
 - multiuser (same budget)
 - xlsx-report available
-- automatically currency rate update (Tinkoff bank's rates)
+- automatically currency rate update
 
 # Installation
 1) ```git clone https://github.com/ShiawasenaHoshi/book-keeper.git; cd book-keeper```

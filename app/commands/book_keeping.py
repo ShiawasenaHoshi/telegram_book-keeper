@@ -1,11 +1,15 @@
 import datetime
 
-from app.api_client import get_tinkoff_currency_rate
+from telebot.apihelper import ApiException, ApiTelegramException
+
+from app.api_client import ExchangeRates
 from app.charts import expenses_pie
 from app.commands.abstract import Cmd, input_method, bot_handler_dict
-from app.models import Transaction, Category, CurrencyRate, Currency, MonthStartBalance, default_dates, CAT_INCOME
+from app.models import Transaction, Category, CurrencyRate, Currency, MonthStartBalance, default_dates, CAT_INCOME, \
+    Receipt
 from app.user_models import ACCESS_LEVEL, User
 from app.report.generator import generate_report
+from config import Config
 
 
 class BookKeepingCmd(Cmd):
@@ -19,34 +23,10 @@ class BookKeepingCmd(Cmd):
                                                   lambda msg: Cmd.is_allowed(msg,
                                                                              ACCESS_LEVEL.USER) and msg.reply_to_message))
 
-    def dict_of_methods(self):
-        with Cmd.ctx():
-            cats = Category.query.order_by(Category.ui_order).all()
-            result = {}
+        bot.add_message_handler(bot_handler_dict(self.save_receipt, None,
+                                                 lambda msg: Cmd.is_allowed(msg,
+                                                                            ACCESS_LEVEL.USER) and msg.reply_to_message and (msg.document or msg.photo)))
 
-            def tx_lambda(cat_id):
-                return lambda msg: self.add_transaction(msg, cat_id)
-
-            for cat in cats:
-                result[tx_lambda(cat.id)] = (cat.short_name, f"{cat.utf_icon} {cat.description}", ACCESS_LEVEL.USER)
-            result[self.summary] = ("summary", "📊 Отчет", ACCESS_LEVEL.USER)
-            result[self.set_currency_rate] = ("set_currency_rate", "💵 💶 Курс", ACCESS_LEVEL.ADMIN)
-            result[self.set_default_currency] = ("set_default_currency", "🔧 Уст. валюту", ACCESS_LEVEL.ADMIN)
-            return result
-
-    re_delete_transaction = f"^(delete|del|rm|удалить|удали)$"
-
-    def delete_transaction(self, msg):
-        with Cmd.ctx():
-            tx = Transaction.remove_by_msg(msg.reply_to_message.chat.id, msg.reply_to_message.id)
-            if tx:
-                cat = Category.get(tx.category_id)
-                tx_str = f"{tx.amount} {tx.currency_iso} ({cat.utf_icon} {cat.description}) {tx.description}"
-                self.bot.reply_to(msg.reply_to_message, f"Запись удалена из базы: {tx_str}",
-                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
-            else:
-                self.bot.reply_to(msg.reply_to_message, f"Запись уже удалена из базы ранее",
-                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
 
     def edit_transaction(self, msg):
         amount, currency_iso, description = self.parse_tx_msg(msg)
@@ -62,6 +42,54 @@ class BookKeepingCmd(Cmd):
                                   reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
         self.l.info(f"Uid_{msg.from_user.id} has sended data: {msg.text}")
 
+    re_delete_transaction = f"^(delete|del|rm|удалить|удали)$"
+
+    def delete_transaction(self, msg):
+        with Cmd.ctx():
+            tx = Transaction.remove_by_msg(msg.reply_to_message.chat.id, msg.reply_to_message.id)
+            if tx:
+                cat = Category.get(tx.category_id)
+                tx_str = f"{tx.amount} {tx.currency_iso} ({cat.utf_icon} {cat.description}) {tx.description}"
+                self.bot.reply_to(msg.reply_to_message, f"Запись удалена из базы: {tx_str}",
+                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
+            else:
+                self.bot.reply_to(msg.reply_to_message, f"Запись уже удалена из базы ранее",
+                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
+
+    def save_receipt(self, msg):
+        with Cmd.ctx():
+            try:
+                r = Receipt.add_from_msg(self.l, self.bot, msg)
+                self.bot.reply_to(msg, f"Чек номер {r.file_number} добавлен к транзакции",
+                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
+            except ApiException as ae:
+                self.l.error(f'{ae}', exc_info=True)
+                if "file is too big" in ae.args[0]:
+                    self.bot.reply_to(msg, "Файл слишком большой",
+                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
+                else:
+                    raise ae
+            except BaseException as e:
+                self.l.error(f'{e}', exc_info=True)
+                self.bot.reply_to(msg, f"Файл не скачался. Причина: {e}",
+                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
+
+
+    def dict_of_methods(self):
+        with Cmd.ctx():
+            cats = Category.query.order_by(Category.ui_order).all()
+            result = {}
+
+            def tx_lambda(cat_id):
+                return lambda msg: self.add_transaction(msg, cat_id)
+
+            for cat in cats:
+                result[tx_lambda(cat.id)] = (cat.short_name, f"{cat.utf_icon} {cat.description}", ACCESS_LEVEL.USER)
+
+            result[self.set_default_currency] = ("set_default_currency", "🔧 Уст. валюту", ACCESS_LEVEL.ADMIN)
+            result[self.summary] = ("summary", "📊 Отчет", ACCESS_LEVEL.USER)
+            return result
+
     def set_default_currency(self, msg):
         msg = self.bot.send_message(msg.chat.id,
                                     'Напишите iso валюты',
@@ -76,12 +104,6 @@ class BookKeepingCmd(Cmd):
         self.bot.reply_to(msg, f"{iso} теперь валюта по умолчанию",
                           reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
         self.l.info(f"Uid_{msg.from_user.id} has sended data: {msg.text}")
-
-    def set_currency_rate(self, msg):
-        msg = self.bot.send_message(msg.chat.id,
-                                    'Валюта <пробел> стоимость одной единицы ИЛИ Валюта <пробел> сумма в рублях <пробел> сумма в валюте',
-                                    reply_markup=self.markup_back_to_menu)
-        self.bot.register_next_step_handler(msg, self.waiting_for_data_currency_rate)
 
     @input_method()
     def waiting_for_data_currency_rate(self, msg):
@@ -121,7 +143,10 @@ class BookKeepingCmd(Cmd):
         self.bot.register_next_step_handler(msg, lambda msg: self.waiting_for_data_transaction(msg, cat_id, summary))
 
     def parse_tx_msg(self, msg):
-        data = msg.text.strip().split(" ", 1)
+        temp = msg.text.strip()
+        while "  " in temp:
+            temp = temp.replace("  ", " ")
+        data = temp.split(" ", 1)
         amount = float(data[0])
 
         if len(data) > 1:
@@ -146,10 +171,10 @@ class BookKeepingCmd(Cmd):
                 rate = self.fetch_currency_rate(currency_iso)
                 with Cmd.ctx():
                     Transaction.add(timestamp, amount, currency_iso, msg.chat.id, msg.message_id, description, cat_id)
-                tx_changes = f"+ {round(amount * rate)} руб."
+                tx_changes = f"+ {round(amount * rate)} {Config.MAIN_CURRENCY}"
 
                 expenses_text = "\n".join(
-                    [f"{val['icon']} {val['description']}: {val['sum']} руб. {tx_changes if id == cat_id else ''}" for
+                    [f"{val['icon']} {val['description']}: {val['sum']} {Config.MAIN_CURRENCY} {tx_changes if id == cat_id else ''}" for
                      id, val in
                      summary["month_expenses"].items()])
                 if cat_id == CAT_INCOME:
@@ -174,7 +199,7 @@ class BookKeepingCmd(Cmd):
                                   reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
 
     def fetch_currency_rate(self, iso=None):
-        if iso == "rub":
+        if iso == Config.MAIN_CURRENCY:
             rate = 1
         else:
             with Cmd.ctx():
@@ -182,7 +207,7 @@ class BookKeepingCmd(Cmd):
                     iso = Currency.get_default()
                 rate = CurrencyRate.get(iso)
                 if not rate:
-                    rate = get_tinkoff_currency_rate("rub", iso)
+                    rate = ExchangeRates.get(Config.MAIN_CURRENCY, iso)
                     CurrencyRate.set(iso, rate)
                     self.l.info(f"Today's {iso.upper()} rate set to {rate}")
         return rate
@@ -191,10 +216,10 @@ class BookKeepingCmd(Cmd):
         with Cmd.ctx():
             for iso in Currency.get_all():
                 if not CurrencyRate.get(iso):
-                    if iso == "rub":
+                    if iso == Config.MAIN_CURRENCY:
                         rate = 1
                     else:
-                        rate = get_tinkoff_currency_rate("rub", iso)
+                        rate = ExchangeRates.get(Config.MAIN_CURRENCY, iso)
                     CurrencyRate.set(iso, rate)
                     self.l.info(f"Today's {iso.upper()} rate set to {rate}")
 
@@ -233,7 +258,7 @@ class BookKeepingCmd(Cmd):
                 expenses_text = "РАСХОД ПО КАТЕГОРИЯМ\n"
                 expenses_text += "\n".join(
                     [
-                        f"{e['icon']} {e['description']}: {e['sum']} руб. ({e['percentage'] if e['percentage'] >= 0.1 else '>0.1'}%)"
+                        f"{e['icon']} {e['description']}: {e['sum']} {Config.MAIN_CURRENCY} ({e['percentage'] if e['percentage'] >= 0.1 else '>0.1'}%)"
                         for e in summary["expenses"].values()])
 
                 self.bot.send_message(user_id, expenses_text)
@@ -255,8 +280,13 @@ class BookKeepingCmd(Cmd):
                 last_month = datetime.date.today().replace(day=1) - datetime.timedelta(days=1)
                 from_date, to_date = default_dates(datetime.date(last_month.year, last_month.month, 1))
                 for u in User.query.all():
-                    self.bot.send_message(u.id, "ОТЧЕТ ЗА ПРОШЛЫЙ МЕСЯЦ")
-                    self.summary(u.id, from_date, to_date)
+                    try:
+                        self.bot.send_message(u.id, "ОТЧЕТ ЗА ПРОШЛЫЙ МЕСЯЦ")
+                        self.summary(u.id, from_date, to_date)
+                    except ApiTelegramException as ate:
+                        self.l.error(f"uid{u.id}: {ate}")
+                    except BaseException as be:
+                        self.l.error(be, exc_info=True)
                 self.l.info("Defining month's start balance")
                 b = MonthStartBalance.update()
-            self.l.info(f"Month's start balance defined as {b.balance} rub")
+            self.l.info(f"Month's start balance defined as {b.balance} {Config.MAIN_CURRENCY}")
