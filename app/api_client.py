@@ -33,7 +33,7 @@ class ExchangeRates():
                    "Sec-Fetch-Dest": "empty", "Referer": "https://www.tinkoff.ru/",
                    "Accept-Encoding": "gzip, deflate", "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
                    "Connection": "close"}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, timeout=30, headers=headers)
 
         parsed = json.loads(response.text)
         for rate in parsed["payload"]["rates"]:
@@ -44,7 +44,7 @@ class ExchangeRates():
     def _get_exchangerate_rate(self, iso_default, iso_to):
         if not self.rates_cache:
             url = f'https://api.exchangerate.host/latest?base={iso_default}'
-            response = requests.get(url)
+            response = requests.get(url, timeout=30)
             data = response.json()
             self.rates_cache = {}
             for iso, rate in data["rates"].items():
