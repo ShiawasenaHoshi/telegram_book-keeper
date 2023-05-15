@@ -1,4 +1,4 @@
-FROM python:3.8-slim-buster
+FROM python:3.12-rc-slim
 
 COPY requirements.txt /tmp/
 COPY install-packages.sh /tmp/
