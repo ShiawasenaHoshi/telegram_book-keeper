@@ -1,4 +1,4 @@
-name: zap_scan
+name: zap
 
 on:
   pull_request: {}
