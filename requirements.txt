@@ -23,7 +23,7 @@ MarkupSafe==2.0.1
 matplotlib==3.4.2
 numpy==1.22.0
 openpyxl==3.0.7
-Pillow==9.3.0
+Pillow==9.4.0
 psycopg2==2.8.6
 pyparsing==2.4.7
 pyTelegramBotAPI==3.7.9
@@ -40,3 +40,4 @@ tornado==6.1
 tzlocal==2.1
 urllib3==1.26.5
 Werkzeug==2.2.3
+setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
