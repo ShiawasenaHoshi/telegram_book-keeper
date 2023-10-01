@@ -51,5 +51,6 @@ class ExchangeRates():
             data = response.json()
             self.rates_cache = {}
             for iso, rate in data["data"].items():
-                self.rates_cache[iso.upper()] = 1.0 / rate["value"]
+                if iso.upper() in self.rates_cache:
+                    self.rates_cache[iso.upper()] = 1.0 / rate["value"]
         return self.rates_cache[iso_to.upper()]
