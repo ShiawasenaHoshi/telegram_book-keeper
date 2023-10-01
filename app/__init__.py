@@ -29,7 +29,7 @@ def create_app(config_class=Config):
                 InitDB(app).init_all()
 
         from app.api_client import ExchangeRates
-        ExchangeRates.init(Config.MAIN_CURRENCY)
+        ExchangeRates.init(Config.MAIN_CURRENCY, Config.CURRENCY_API_KEY)
         app.logger.setLevel(logging.INFO)
         if (len(sys.argv) > 1 and sys.argv[1] == 'db'):
             return app

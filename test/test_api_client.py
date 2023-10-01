@@ -1,6 +1,7 @@
 import unittest
 
 from app.api_client import ExchangeRates
+from test._test_config import TestConfig
 
 
 class ApiClientCase(unittest.TestCase):
@@ -11,7 +12,7 @@ class ApiClientCase(unittest.TestCase):
         self.assertTrue(result > 0)
 
     def test_get_exchangerate_rate(self):
-        ExchangeRates.init("eur")
+        ExchangeRates.init("eur", TestConfig.CURRENCY_API_KEY)
         result = ExchangeRates.get("eur", "gel")
         self.assertTrue(isinstance(result, float))
         self.assertTrue(result > 0)

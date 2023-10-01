@@ -5,14 +5,16 @@ import json
 class ExchangeRates():
     _instance = None
     _rates_method = None
+    _currency_api_key = None
 
     def __init__(self):
         self.rates_cache = None
 
     @classmethod
-    def init(cls, provider):
+    def init(cls, provider, currency_api_key):
         if cls._instance is None:
             cls._instance = ExchangeRates()
+            cls._currency_api_key = currency_api_key
             if provider == "tinkoff":
                 cls._rates_method = cls._instance._get_tinkoff_currency_rate
             else:
@@ -33,7 +35,7 @@ class ExchangeRates():
                    "Sec-Fetch-Dest": "empty", "Referer": "https://www.tinkoff.ru/",
                    "Accept-Encoding": "gzip, deflate", "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
                    "Connection": "close"}
-        response = requests.get(url, timeout=30, headers=headers)
+        response = requests.get(url, headers=headers)
 
         parsed = json.loads(response.text)
         for rate in parsed["payload"]["rates"]:
@@ -43,10 +45,11 @@ class ExchangeRates():
 
     def _get_exchangerate_rate(self, iso_default, iso_to):
         if not self.rates_cache:
-            url = f'https://api.exchangerate.host/latest?base={iso_default}'
-            response = requests.get(url, timeout=30)
+            url = f'https://api.currencyapi.com/v3/latest?base_currency={iso_default.upper()}'
+            headers = {"apikey": self._currency_api_key}
+            response = requests.get(url, headers=headers)
             data = response.json()
             self.rates_cache = {}
-            for iso, rate in data["rates"].items():
-                self.rates_cache[iso.lower()] = 1.0 / rate
-        return self.rates_cache[iso_to]
+            for iso, rate in data["data"].items():
+                self.rates_cache[iso.upper()] = 1.0 / rate["value"]
+        return self.rates_cache[iso_to.upper()]

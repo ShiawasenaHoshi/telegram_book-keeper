@@ -40,4 +40,4 @@ tornado==6.1
 tzlocal==2.1
 urllib3==1.26.5
 Werkzeug==2.2.3
-setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
+setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerabilit
