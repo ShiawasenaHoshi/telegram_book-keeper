@@ -69,7 +69,7 @@ class InitDB():
     def init_currencies(self):
         with self.app.app_context():
             from app.api_client import ExchangeRates
-            ExchangeRates.init("")
+            ExchangeRates.init("", Config.CURRENCY_API_KEY)
             ExchangeRates.get("eur","usd") #load
             currencies_db = Currency.get_all()
             if len(currencies_db) == 0:
