@@ -52,4 +52,7 @@ class ExchangeRates():
             self.rates_cache = {}
             for iso, rate in data["data"].items():
                 self.rates_cache[iso.upper()] = 1.0 / rate["value"]
-        return self.rates_cache[iso_to.upper()]
+        if iso_to.upper() in self.rates_cache:
+            return self.rates_cache[iso_to.upper()]
+        else:
+            return 0
