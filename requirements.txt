@@ -6,7 +6,7 @@ click==8.0.1
 cycler==0.10.0
 dnspython==1.16.0
 enum34==1.1.10
-eventlet==0.30.2
+eventlet==0.37.0
 Flask==2.2.5
 Flask-Migrate==3.0.0
 Flask-SQLAlchemy==2.5.1
