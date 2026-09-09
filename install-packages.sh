@@ -19,5 +19,7 @@ apk add --no-cache \
   libxml2-dev \
   libxslt-dev
 
+apk upgrade --no-cache
+
 pip install --no-cache-dir -U pip
 pip install --no-cache-dir -r /tmp/requirements.txt
