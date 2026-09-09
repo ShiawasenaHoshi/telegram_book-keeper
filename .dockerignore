@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.env.*
+postgres
+receipts
+venv
+.venv
+**/__pycache__
+**/*.pyc
+.mypy_cache
+.pytest_cache
