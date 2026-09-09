@@ -1,3 +1,4 @@
+from app import db
 from app.commands.abstract import Cmd, input_method
 from app.user_models import ACCESS_LEVEL, User
 
@@ -16,29 +17,39 @@ class UserCmd(Cmd):
                                     reply_markup=self.markup_back_to_menu)
         self.bot.register_next_step_handler(msg, self.waiting_user_add)
 
+    @staticmethod
+    def _forwarded_sender(msg):
+        if msg.forward_from is not None:
+            return msg.forward_from
+        origin = getattr(msg, 'forward_origin', None)
+        if origin is not None and getattr(origin, 'type', None) == 'user':
+            return origin.sender_user
+        return None
+
     @input_method()
     def waiting_user_add(self, msg):
-        if msg.forward_from is not None:
-            self.add_forwarded(msg)
+        forwarded = self._forwarded_sender(msg)
+        if forwarded is not None:
+            self.add_forwarded(msg, forwarded)
         elif msg.content_type == 'contact':
             self.add_contact(msg)
         else:
             pass  # todo validate and add user by ID
         # todo change name of added user
 
-    def add_forwarded(self, msg):
+    def add_forwarded(self, msg, forwarded):
         with Cmd.ctx():
-            if msg.forward_from.first_name and msg.forward_from.last_name:
-                name = "{0} {1}".format(msg.forward_from.first_name, msg.forward_from.last_name)
-            elif msg.forward_from.first_name:
-                name = msg.forward_from.first_name
-                if msg.forward_from.username:
-                    name = name + " " + msg.forward_from.username
-            elif msg.forward_from.username:
-                name = msg.forward_from.username
+            if forwarded.first_name and forwarded.last_name:
+                name = "{0} {1}".format(forwarded.first_name, forwarded.last_name)
+            elif forwarded.first_name:
+                name = forwarded.first_name
+                if forwarded.username:
+                    name = name + " " + forwarded.username
+            elif forwarded.username:
+                name = forwarded.username
             else:
-                name = str(msg.forward_from.id)
-            user = User.add(msg.forward_from.id, name, ACCESS_LEVEL.USER)
+                name = str(forwarded.id)
+            user = User.add(forwarded.id, name, ACCESS_LEVEL.USER)
             if user:
                 self.bot.send_message(msg.chat.id, f'Пользователь {name} добавлен',
                                       reply_markup=Cmd.get_markup_for_access_level(
@@ -65,6 +76,6 @@ class UserCmd(Cmd):
 
     def ls(self, msg):
         with Cmd.ctx():
-            users = User.query.all()
+            users = db.session.execute(db.select(User)).scalars().all()
             ls_msg = "\n".join([f'{str(user.id)}: {user.name}' for user in users])
             self.bot.send_message(msg.chat.id, ls_msg)

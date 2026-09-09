@@ -15,7 +15,7 @@ class User(db.Model):
 
     @staticmethod
     def add(id, name, access_level):
-        if not User.query.filter_by(id=id).first():
+        if not db.session.execute(db.select(User).filter_by(id=id)).scalar_one_or_none():
             u = User()
             u.id = id
             u.name = name
@@ -26,4 +26,4 @@ class User(db.Model):
 
     @staticmethod
     def get(msg):
-        return User.query.filter_by(id=msg.from_user.id).first()
+        return db.session.get(User, msg.from_user.id)

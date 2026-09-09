@@ -39,16 +39,21 @@ def edited_message(
 def forwarded_message(
   admin_id: int, forward_from_id: int, *, first_name: str = "Forwarded"
 ) -> dict[str, Any]:
+  now = int(time.time())
   return {
     "message": {
       "message_id": 50,
-      "date": int(time.time()),
+      "date": now,
       "chat": {"id": admin_id, "type": "private"},
       "from": {"id": admin_id, "is_bot": False, "first_name": "Admin"},
-      "forward_from": {
-        "id": forward_from_id,
-        "is_bot": False,
-        "first_name": first_name,
+      "forward_origin": {
+        "type": "user",
+        "date": now,
+        "sender_user": {
+          "id": forward_from_id,
+          "is_bot": False,
+          "first_name": first_name,
+        },
       },
       "text": "hello",
     }
