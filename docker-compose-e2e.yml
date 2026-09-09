@@ -1,6 +1,5 @@
 services:
   emulator:
-    build: ../telemulator
     image: ghcr.io/shiawasenahoshi/telemulator/emulator:0.3.1
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
@@ -58,11 +57,10 @@ services:
       PG_DSN: postgresql://postgres:postgres@postgres:5432/postgres
     volumes:
       - ./test/e2e:/work:ro
-      - ../telemulator:/telemulator:ro
     command:
       - bash
       - -c
-      - apt-get update -qq && apt-get install -y -qq git && cp -r /telemulator /tmp/telemulator && pip install -q /tmp/telemulator && pip install -q -r requirements.txt && pytest -q -p no:cacheprovider
+      - pip install -q -r requirements.txt && pytest -q -p no:cacheprovider
     depends_on:
       bot:
         condition: service_started
