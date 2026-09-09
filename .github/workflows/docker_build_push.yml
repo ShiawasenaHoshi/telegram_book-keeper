@@ -30,7 +30,7 @@ jobs:
           cache-from: type=gha,scope=bot
           cache-to: type=gha,mode=max,scope=bot
 
-      - name: Trivy (HIGH/CRITICAL)
+      - name: Trivy (HIGH/CRITICAL, OS packages)
         uses: aquasecurity/trivy-action@v0.36.0
         env:
           TRIVY_SCANNERS: vuln
@@ -41,6 +41,7 @@ jobs:
           exit-code: "1"
           format: sarif
           output: trivy-results.sarif
+          vuln-type: os
 
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
