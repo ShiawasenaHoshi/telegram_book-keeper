@@ -33,7 +33,6 @@ services:
       TM_FILE_URL: "http://emulator:8081/file/bot{0}/{1}"
       BOT_INTERVAL: "1"
       BOT_TIMEOUT: "3"
-      CURRENCY_API_KEY: ${CURRENCY_API_KEY:?set CURRENCY_API_KEY for currencyapi}
       MAIN_CURRENCY: eur
       MPLBACKEND: Agg
     volumes:

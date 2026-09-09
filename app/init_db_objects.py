@@ -59,24 +59,33 @@ class InitDB():
 
     def init_currencies(self):
         with self.app.app_context():
-            from app.api_client import ExchangeRates
-            ExchangeRates.init("", Config.CURRENCY_API_KEY)
-            ExchangeRates.get("eur","usd") #load
-            currencies_db = Currency.get_all()
-            if len(currencies_db) == 0:
-                for iso, rate in ExchangeRates._instance.rates_cache.items():
-                    c = Currency()
-                    c.iso = iso.lower()
-                    if iso.lower() == Config.MAIN_CURRENCY:
-                        c.default = True
-                    db.session.add(c)
-                    cr = CurrencyRate()
-                    cr.iso = iso.lower()
-                    cr.date = datetime.date.today()
-                    cr.rate = rate
-
-                    db.session.add(cr)
+            if Currency.get_all():
+                return self
+            if Config.CURRENCY_API_KEY:
+                from app.api_client import ExchangeRates
+                ExchangeRates.init("", Config.CURRENCY_API_KEY)
+                ExchangeRates.get(Config.MAIN_CURRENCY, "usd")
+                rates = ExchangeRates._instance.rates_cache.items()
+            else:
+                from app.reference_currency_data import REFERENCE_RATES
+                rates = REFERENCE_RATES.items()
+            self._seed_currencies(rates)
         return self
+
+    def _seed_currencies(self, rates):
+        main = Config.MAIN_CURRENCY.lower()
+        today = datetime.date.today()
+        for iso, rate in rates:
+            iso_lower = iso.lower()
+            c = Currency()
+            c.iso = iso_lower
+            c.default = iso_lower == main
+            db.session.add(c)
+            cr = CurrencyRate()
+            cr.iso = iso_lower
+            cr.date = today
+            cr.rate = rate
+            db.session.add(cr)
 
     def do(self):
         db.session.commit()

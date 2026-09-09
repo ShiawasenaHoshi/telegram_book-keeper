@@ -19,8 +19,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run e2e
-        env:
-          CURRENCY_API_KEY: ${{ secrets.CURRENCY_API_KEY }}
         run: docker compose -f docker-compose-e2e.yml up --build --abort-on-container-exit --exit-code-from e2e
 
       - name: Tear down
