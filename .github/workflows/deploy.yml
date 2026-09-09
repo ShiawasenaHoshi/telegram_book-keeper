@@ -1,0 +1,204 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        type: choice
+        options:
+          - prod
+        default: prod
+      ref:
+        description: Branch or SHA
+        type: string
+        default: main
+
+env:
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.values.outputs.tag }}
+      repo: ${{ steps.values.outputs.repo }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - id: values
+        run: |
+          echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ needs.prepare.outputs.repo }}/bot:${{ needs.prepare.outputs.tag }}
+          cache-from: type=gha,scope=bot
+          cache-to: type=gha,mode=max,scope=bot
+      - name: Trivy (report, OS packages)
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_SCANNERS: vuln
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ needs.prepare.outputs.repo }}/bot:${{ needs.prepare.outputs.tag }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: sarif
+          output: trivy.sarif
+          vuln-type: os
+      - uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        if: always()
+        with:
+          sarif_file: trivy.sarif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-sarif
+          path: trivy.sarif
+
+  deploy:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Render .env
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_ADMIN_ID: ${{ secrets.TG_ADMIN_ID }}
+          SQLALCHEMY_DATABASE_URI: ${{ secrets.SQLALCHEMY_DATABASE_URI }}
+          CURRENCY_API_KEY: ${{ secrets.CURRENCY_API_KEY }}
+          MAIN_CURRENCY: ${{ secrets.MAIN_CURRENCY }}
+          BOT_IMAGE: ${{ env.REGISTRY }}/${{ needs.prepare.outputs.repo }}/bot:${{ needs.prepare.outputs.tag }}
+        run: python scripts/render_env.py --template env.template --out .env
+      - name: Prepare SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Copy to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" 'mkdir -p /opt/book-keeper'
+          scp docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:/opt/book-keeper/"
+          scp .env "$DEPLOY_USER@$DEPLOY_HOST:/opt/book-keeper/.env"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" 'chmod 600 /opt/book-keeper/.env'
+      - name: Roll out
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            printf 'REGISTRY_USER=%q\n' "$REGISTRY_USER"
+            printf 'REGISTRY_TOKEN=%q\n' "$REGISTRY_TOKEN"
+            printf 'export REGISTRY_USER REGISTRY_TOKEN\n'
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd /opt/book-keeper
+          COMPOSE="docker compose --env-file .env -f docker-compose.yml"
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          $COMPOSE pull
+          $COMPOSE up -d --no-build
+          echo "REMOTE-SCRIPT-COMPLETE"
+          REMOTE
+          } | ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -s | tee /tmp/remote.log
+          grep -q "REMOTE-SCRIPT-COMPLETE" /tmp/remote.log || {
+            echo "Remote script did not finish" >&2
+            exit 1
+          }
+      - name: Wait until running, pg_isready, RestartCount stable
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<'REMOTE'
+          set -uo pipefail
+          cd /opt/book-keeper
+          COMPOSE="docker compose --env-file .env -f docker-compose.yml"
+          last_rc=""
+          stable_since=""
+          for _ in $(seq 1 50); do
+            bot_id=$($COMPOSE ps -q bot </dev/null)
+            pg_id=$($COMPOSE ps -q postgres </dev/null)
+            bot_st=$(docker inspect -f '{{.State.Status}}' "$bot_id" 2>/dev/null || echo missing)
+            bot_rc=$(docker inspect -f '{{.RestartCount}}' "$bot_id" 2>/dev/null || echo "")
+            pg_ok=$(docker exec "$pg_id" pg_isready -U postgres -d postgres >/dev/null 2>&1 && echo yes || echo no)
+            now=$(date +%s)
+            if [ "$bot_st" = "running" ] && [ "$pg_ok" = "yes" ] && [ -n "$bot_rc" ]; then
+              if [ "$last_rc" = "$bot_rc" ] && [ -n "$stable_since" ]; then
+                if [ $((now - stable_since)) -ge 20 ]; then
+                  echo "bot running, postgres ready, RestartCount=$bot_rc stable ≥20s"
+                  exit 0
+                fi
+              else
+                last_rc=$bot_rc
+                stable_since=$now
+              fi
+            else
+              last_rc=""
+              stable_since=""
+            fi
+            sleep 3
+          done
+          echo "Did not become ready (running + pg_isready + RestartCount stable 20s)" >&2
+          $COMPOSE ps </dev/null
+          docker inspect -f 'bot Status={{.State.Status}} RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}}' \
+            "$($COMPOSE ps -q bot </dev/null)" 2>/dev/null || true
+          exit 1
+          REMOTE
+      - name: Logs on failure
+        if: failure()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            'cd /opt/book-keeper && docker compose --env-file .env -f docker-compose.yml logs --tail=200 --no-color' \
+            || true
