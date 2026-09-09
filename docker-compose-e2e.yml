@@ -60,7 +60,7 @@ services:
     command:
       - bash
       - -c
-      - pip install -q -r requirements.txt && pytest -q -p no:cacheprovider
+      - apt-get update -qq && apt-get install -y -qq git && pip install -q -r requirements.txt && pytest -q -p no:cacheprovider
     depends_on:
       bot:
         condition: service_started
