@@ -15,8 +15,6 @@ services:
       POSTGRES_PASSWORD: postgres
     volumes:
       - bk-e2e-pg:/var/lib/postgresql/data
-      - ${HOME}/tg-bots-data/book-keeper/postgres.dump:/seed.dump:ro
-      - ./test/e2e/init-restore.sh:/docker-entrypoint-initdb.d/10-restore.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 3s
@@ -35,7 +33,6 @@ services:
       TM_FILE_URL: "http://emulator:8081/file/bot{0}/{1}"
       BOT_INTERVAL: "1"
       BOT_TIMEOUT: "3"
-      CURRENCY_API_KEY: ${CURRENCY_API_KEY:?set it from ~/tg-bots-data/book-keeper/.env}
       MAIN_CURRENCY: eur
       MPLBACKEND: Agg
     volumes:

@@ -1,4 +1,4 @@
-FROM python:3.12-alpine3.20
+FROM python:3.12-alpine
 
 COPY requirements.txt /tmp/
 COPY install-packages.sh /tmp/
