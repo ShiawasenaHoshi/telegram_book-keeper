@@ -1,6 +1,7 @@
 services:
   emulator:
-    image: ghcr.io/shiawasenahoshi/telemulator/emulator:0.3.0
+    build: ../telemulator
+    image: ghcr.io/shiawasenahoshi/telemulator/emulator:0.3.1
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
       interval: 3s
@@ -61,7 +62,7 @@ services:
     command:
       - bash
       - -c
-      - cp -r /telemulator /tmp/telemulator && pip install -q /tmp/telemulator && pip install -q -r requirements.txt && pytest -q -p no:cacheprovider
+      - apt-get update -qq && apt-get install -y -qq git && cp -r /telemulator /tmp/telemulator && pip install -q /tmp/telemulator && pip install -q -r requirements.txt && pytest -q -p no:cacheprovider
     depends_on:
       bot:
         condition: service_started

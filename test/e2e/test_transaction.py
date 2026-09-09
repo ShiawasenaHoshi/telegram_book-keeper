@@ -20,3 +20,15 @@ async def test_a_transaction_is_deleted_by_answering_it(user, db) -> None:
 
   assert "удалена" in screen.text.lower()
   assert db.execute('SELECT count(*) FROM "transaction"').fetchone() == (0,)
+
+
+async def test_deleting_twice_reports_already_removed(user, db) -> None:
+  await user.send("🏪 Супермаркеты")
+  await user.send("100")
+  message_id = db.execute('SELECT msg_id FROM "transaction"').fetchone()[0]
+
+  await user.send("delete", reply_to_message_id=message_id)
+  screen = await user.send("delete", reply_to_message_id=message_id)
+
+  assert "ранее" in screen.text.lower()
+  assert db.execute('SELECT count(*) FROM "transaction"').fetchone() == (0,)

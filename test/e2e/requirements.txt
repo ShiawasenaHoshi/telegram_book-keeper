@@ -1,3 +1,4 @@
+telemulator @ git+https://github.com/ShiawasenaHoshi/telemulator.git@v0.3.0
 pytest>=8.0
 pytest-asyncio>=0.23
 psycopg[binary]>=3.1

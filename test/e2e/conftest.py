@@ -20,7 +20,9 @@ _user_ids = itertools.count(900_101)
 # category, currency and currency_rate are seeded once by InitDB at startup and
 # must survive: the bot builds its buttons and regexes from category when Cmd is
 # constructed, so an empty table leaves the keyboard pointing at nothing.
-APPLICATION_TABLES = ('"transaction"', "receipt", "month_start_balance", '"user"')
+# month_start_balance is written once at bot startup; truncating it makes a polling
+# restart broadcast to every user again.
+APPLICATION_TABLES = ('"transaction"', "receipt", '"user"')
 
 
 def _truncate() -> None:
@@ -59,3 +61,30 @@ async def user(bot_is_polling, db):
     yield client
   finally:
     await client.aclose()
+
+
+@pytest_asyncio.fixture
+async def stranger(bot_is_polling):
+  _truncate()
+  client = await RemoteUserClient(TM_BASE_URL, next(_user_ids), BOT_TOKEN).open()
+  try:
+    yield client
+  finally:
+    await client.aclose()
+
+
+@pytest_asyncio.fixture
+async def admin(bot_is_polling, db):
+  _truncate()
+  user_id = next(_user_ids)
+  db.execute(
+    'INSERT INTO "user" (id, name, access_level) VALUES (%s, %s, %s)',
+    (user_id, "admin", "ADMIN"),
+  )
+  client = await RemoteUserClient(TM_BASE_URL, user_id, BOT_TOKEN).open()
+  try:
+    yield client
+  finally:
+    await client.aclose()
+
+
