@@ -1,4 +1,4 @@
-FROM python:3.8.16-slim-buster
+FROM python:3.8.20-slim-bookworm
 
 COPY requirements.txt /tmp/
 COPY install-packages.sh /tmp/
@@ -12,10 +12,6 @@ COPY app /home/bot/app/
 COPY config.py .
 COPY bot.py .
 COPY start.py .
-
-# If you are going to use webhooks, generate cert's files, uncomment two lines below and rebuild container
-#COPY webhook_cert.pem .
-#COPY webhook_pkey.pem .
 COPY migrations /home/bot/migrations
 
 CMD [ "python", "start.py" ]

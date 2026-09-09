@@ -1,0 +1,69 @@
+services:
+  emulator:
+    image: ghcr.io/shiawasenahoshi/telemulator/emulator:0.3.1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - bk-e2e-pg:/var/lib/postgresql/data
+      - ${HOME}/tg-bots-data/book-keeper/postgres.dump:/seed.dump:ro
+      - ./test/e2e/init-restore.sh:/docker-entrypoint-initdb.d/10-restore.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  bot:
+    build: .
+    working_dir: /home/bot
+    environment:
+      TG_TOKEN: "111111111:AAFakeBotTokenForE2ETests0000000"
+      TG_ADMIN_ID: "900000"
+      WEBHOOK_ENABLE: "0"
+      SQLALCHEMY_DATABASE_URI: postgresql://postgres:postgres@postgres:5432/postgres
+      TM_API_URL: "http://emulator:8081/bot{0}/{1}"
+      TM_FILE_URL: "http://emulator:8081/file/bot{0}/{1}"
+      BOT_INTERVAL: "1"
+      BOT_TIMEOUT: "3"
+      CURRENCY_API_KEY: ${CURRENCY_API_KEY:?set it from ~/tg-bots-data/book-keeper/.env}
+      MAIN_CURRENCY: eur
+      MPLBACKEND: Agg
+    volumes:
+      - ./test/e2e:/home/bot/e2e:ro
+    command: ["python", "/home/bot/e2e/e2e_entry.py"]
+    depends_on:
+      emulator:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  e2e:
+    image: python:3.12-slim
+    working_dir: /work
+    environment:
+      TM_BASE_URL: http://emulator:8081
+      BOT_TOKEN: "111111111:AAFakeBotTokenForE2ETests0000000"
+      TG_ADMIN_ID: "900000"
+      PG_DSN: postgresql://postgres:postgres@postgres:5432/postgres
+    volumes:
+      - ./test/e2e:/work:ro
+    command:
+      - bash
+      - -c
+      - apt-get update -qq && apt-get install -y -qq git && pip install -q -r requirements.txt && pytest -q -p no:cacheprovider
+    depends_on:
+      bot:
+        condition: service_started
+
+volumes:
+  bk-e2e-pg:
