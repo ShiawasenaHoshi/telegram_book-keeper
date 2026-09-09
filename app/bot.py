@@ -63,7 +63,7 @@ class Bot(threading.Thread):
                     self.l.info("New bot instance started")
                     self.bot = telebot.TeleBot(self.tg_token)
                     Bot.init_commands(self.bot, app, self.l, self.admin)
-                    self.bot.polling(none_stop=True, interval=Config.BOT_INTERVAL, timeout=Config.BOT_TIMEOUT)
+                    self.bot.polling(non_stop=True, interval=Config.BOT_INTERVAL, timeout=Config.BOT_TIMEOUT)
                 except Exception as ex:  # Error in polling
                     self.l.error("Bot polling failed, restarting in {}sec. Error:\n{}".format(Config.BOT_TIMEOUT, ex),
                                  exc_info=True)

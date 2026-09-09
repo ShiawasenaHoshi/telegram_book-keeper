@@ -55,7 +55,9 @@ class Transaction(db.Model):
 
     @staticmethod
     def remove_by_msg(user_id, msg_id):
-        tx = Transaction.query.filter_by(user_id=user_id, msg_id=msg_id).first()
+        tx = db.session.execute(
+            db.select(Transaction).filter_by(user_id=user_id, msg_id=msg_id)
+        ).scalar_one_or_none()
         if tx:
             db.session.delete(tx)
             db.session.commit()
@@ -63,7 +65,9 @@ class Transaction(db.Model):
 
     @staticmethod
     def edit_by_msg(user_id, msg_id, amount, currency_iso, description):
-        tx = Transaction.query.filter_by(user_id=user_id, msg_id=msg_id).first()
+        tx = db.session.execute(
+            db.select(Transaction).filter_by(user_id=user_id, msg_id=msg_id)
+        ).scalar_one_or_none()
         if tx:
             tx.amount = amount
             if currency_iso:
@@ -72,12 +76,16 @@ class Transaction(db.Model):
                 tx.description = description
             if tx:
                 db.session.commit()
-                tx = Transaction.query.filter_by(user_id=user_id, msg_id=msg_id).first()
+                tx = db.session.execute(
+                    db.select(Transaction).filter_by(user_id=user_id, msg_id=msg_id)
+                ).scalar_one_or_none()
         return tx
 
     @staticmethod
     def get_by_msg(user_id, msg_id):
-        return Transaction.query.filter_by(user_id=user_id, msg_id=msg_id).first()
+        return db.session.execute(
+            db.select(Transaction).filter_by(user_id=user_id, msg_id=msg_id)
+        ).scalar_one_or_none()
 
     @staticmethod
     def tx_summary(category_id):
@@ -120,17 +128,20 @@ class Transaction(db.Model):
             .join(CurrencyRate, (Transaction.currency_iso == CurrencyRate.iso) & (
                 func.date_trunc('day', Transaction.timestamp) == CurrencyRate.date))\
             .subquery()
-        res = db.session.query(func.DATE(subq3.c.timestamp).label('date'),
-                               cast(subq3.c.timestamp, TIME).label('time'),
-                               User.name,
-                               subq3.c.converted_amount,
-                               func.concat(subq3.c.amount, " ", subq3.c.currency_iso).label('amount_in_currency'),
-                               subq3.c.description,
-                               func.concat(Category.utf_icon, " ", Category.description).label('cat_title')) \
-            .join(Category, subq3.c.category_id == Category.id) \
-            .join(User, subq3.c.user_id == User.id) \
-            .order_by(subq3.c.timestamp) \
-            .all()
+        res = db.session.execute(
+            db.select(
+                func.DATE(subq3.c.timestamp).label('date'),
+                cast(subq3.c.timestamp, TIME).label('time'),
+                User.name,
+                subq3.c.converted_amount,
+                func.concat(subq3.c.amount, " ", subq3.c.currency_iso).label('amount_in_currency'),
+                subq3.c.description,
+                func.concat(Category.utf_icon, " ", Category.description).label('cat_title'),
+            )
+            .join(Category, subq3.c.category_id == Category.id)
+            .join(User, subq3.c.user_id == User.id)
+            .order_by(subq3.c.timestamp)
+        ).all()
 
         return res
 
@@ -155,9 +166,10 @@ class Transaction(db.Model):
             .group_by(subq2.c.category_id) \
             .order_by(desc("sum"))\
             .subquery()
-        total = db.session.query(subq3.c.category_id, Category.description, Category.utf_icon, subq3.c.sum) \
-            .join(Category, subq3.c.category_id == Category.id) \
-            .all()
+        total = db.session.execute(
+            db.select(subq3.c.category_id, Category.description, Category.utf_icon, subq3.c.sum)
+            .join(Category, subq3.c.category_id == Category.id)
+        ).all()
 
         total = {cat[0]: (cat[1], cat[2], round(cat[3], 1)) for cat in total}
 
@@ -181,7 +193,9 @@ class Transaction(db.Model):
             "balance": round(balance, 1)
         }
 
-        start_balance = MonthStartBalance.query.filter_by(year=from_date.year, month=from_date.month).first()
+        start_balance = db.session.execute(
+            db.select(MonthStartBalance).filter_by(year=from_date.year, month=from_date.month)
+        ).scalar_one_or_none()
         if start_balance:
             result["start_balance"] = round(start_balance.balance, 1)
 
@@ -203,22 +217,28 @@ class Currency(db.Model):
 
     @staticmethod
     def set_default(iso):
-        a = Currency.query.filter_by(default=True).first()
+        a = db.session.execute(
+            db.select(Currency).filter_by(default=True)
+        ).scalar_one()
         a.default = False
-        b = Currency.query.filter_by(iso=iso).first()
+        b = db.session.execute(
+            db.select(Currency).filter_by(iso=iso)
+        ).scalar_one()
         b.default = True
         db.session.commit()
 
     @staticmethod
     def get_default():
-        return Currency.query.filter_by(default=True).first().iso
+        return db.session.execute(
+            db.select(Currency).filter_by(default=True)
+        ).scalar_one().iso
 
     def get_last_rate(self):
         pass
 
     @staticmethod
     def get_all():
-        currencies = db.session.query(Currency.iso).all()
+        currencies = db.session.execute(db.select(Currency.iso)).all()
         currencies_set = set(c.iso for c in currencies)
         return currencies_set  # todo cache
 
@@ -230,10 +250,15 @@ class CurrencyRate(db.Model):
 
     @staticmethod
     def set(iso, rate, date=None):
-        if not CurrencyRate.get(iso, date):
+        if date is None:
+            date = datetime.date.today()
+        existing = db.session.execute(
+            db.select(CurrencyRate).filter_by(iso=iso, date=date)
+        ).scalar_one_or_none()
+        if existing is None:
             cr = CurrencyRate()
             cr.iso = iso
-            cr.date = date if date else datetime.date.today()
+            cr.date = date
             cr.rate = rate
             db.session.add(cr)
             db.session.commit()
@@ -242,7 +267,9 @@ class CurrencyRate(db.Model):
     def get(iso, date=None):
         if not date:
             date = datetime.date.today()
-        result = CurrencyRate.query.filter_by(iso=iso, date=date).first()
+        result = db.session.execute(
+            db.select(CurrencyRate).filter_by(iso=iso, date=date)
+        ).scalar_one_or_none()
         return result.rate if result else None
 
     @staticmethod
@@ -253,12 +280,13 @@ class CurrencyRate(db.Model):
             label('tx_date', func.date_trunc('day', Transaction.timestamp))
         ) \
             .where(Transaction.timestamp >= from_date, Transaction.timestamp < to_date).subquery()
-        subq2 = db.session.query(subq1.c.currency_iso, subq1.c.tx_date) \
+        subq2 = db.select(subq1.c.currency_iso, subq1.c.tx_date) \
             .distinct(subq1.c.currency_iso, subq1.c.tx_date).subquery()
-        result = db.session.query(subq2.c.currency_iso, subq2.c.tx_date) \
-            .filter(
-            ~exists().where(
-                and_(subq2.c.currency_iso == CurrencyRate.iso, subq2.c.tx_date == CurrencyRate.date))).all()
+        result = db.session.execute(
+            db.select(subq2.c.currency_iso, subq2.c.tx_date)
+            .where(~exists().where(
+                and_(subq2.c.currency_iso == CurrencyRate.iso, subq2.c.tx_date == CurrencyRate.date)))
+        ).all()
         return result
 
 
@@ -270,7 +298,9 @@ class MonthStartBalance(db.Model):
     @staticmethod
     def is_exist_for_current_month():
         today = datetime.date.today()
-        b = MonthStartBalance.query.filter_by(year=today.year, month=today.month).first()
+        b = db.session.execute(
+            db.select(MonthStartBalance).filter_by(year=today.year, month=today.month)
+        ).scalar_one_or_none()
         return b
 
     @staticmethod
@@ -288,13 +318,17 @@ class MonthStartBalance(db.Model):
             raise Exception(f"{'year' if month else 'month'} is None, but {'year' if year else 'month'} isn't None")
         summary = Transaction.summary(from_date=from_date)
 
-        month_start_balance = MonthStartBalance.query.filter_by(year=year, month=month).first()
+        month_start_balance = db.session.execute(
+            db.select(MonthStartBalance).filter_by(year=year, month=month)
+        ).scalar_one_or_none()
         if month_start_balance:
             next_month_balance = month_start_balance.balance + summary['balance']
         else:
             next_month_balance = summary['balance']
         to_date = from_date + relativedelta(months=1)
-        next = MonthStartBalance.query.filter_by(year=to_date.year, month=to_date.month).first()
+        next = db.session.execute(
+            db.select(MonthStartBalance).filter_by(year=to_date.year, month=to_date.month)
+        ).scalar_one_or_none()
         if not next:
             next = MonthStartBalance()
             next.year = to_date.year
@@ -330,7 +364,7 @@ class Category(db.Model):
 
     @staticmethod
     def get(id):
-        return Category.query.filter_by(id=id).first()
+        return db.session.get(Category, id)
 
 
 class Receipt(db.Model):
@@ -348,7 +382,7 @@ class Receipt(db.Model):
         self.msg_id = msg_id
 
     def filename(self):
-        tx = Transaction.query.filter_by(id=self.tx_id).first()
+        tx = db.session.get(Transaction, self.tx_id)
         return Receipt._filename(tx.user_id, tx.message_id, self.file_number)
 
     @staticmethod
@@ -417,4 +451,6 @@ class Receipt(db.Model):
 
     @staticmethod
     def get_by_tx(tx_id):
-        return Receipt.query.filter_by(tx_id=tx_id).order_by("file_number").all()
+        return db.session.execute(
+            db.select(Receipt).filter_by(tx_id=tx_id).order_by(Receipt.file_number)
+        ).scalars().all()

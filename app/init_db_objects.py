@@ -1,24 +1,13 @@
 import datetime
 
-from flask_sqlalchemy import SQLAlchemy
-
-
+from app import db
 from app.models import Category, Currency, CurrencyRate
 from app.user_models import User, ACCESS_LEVEL
 from config import Config
 
 
-# db = SQLAlchemy()
-# migrate = Migrate()
-# app = Flask(__name__)
-# app.config.from_object(Config)
-# db.init_app(app)
-# app = None
-
-
 class InitDB():
     def __init__(self, app):
-        self.db = SQLAlchemy()
         self.app = app
 
     def init_all(self):
@@ -30,12 +19,14 @@ class InitDB():
 
     def init_admin(self):
         with self.app.app_context():
-            if not User.query.filter_by(id=Config.TG_ADMIN_ID).first():
+            if not db.session.execute(
+                db.select(User).filter_by(id=Config.TG_ADMIN_ID)
+            ).scalar_one_or_none():
                 a = User()
                 a.id = Config.TG_ADMIN_ID
                 a.name = "superadmin"
                 a.access_level = ACCESS_LEVEL.ADMIN
-                self.db.session.add(a)
+                db.session.add(a)
         return self
 
     def init_categories(self):
@@ -60,10 +51,10 @@ class InitDB():
                 12: Category()._construct(12, "other", "Другое", 15, "❔"),
 
             }
-            ids = [c.id for c in Category.query.all()]
+            ids = [c.id for c in db.session.execute(db.select(Category)).scalars().all()]
             for id, category in categories.items():
                 if id not in ids:
-                    self.db.session.add(category)
+                    db.session.add(category)
         return self
 
     def init_currencies(self):
@@ -78,14 +69,14 @@ class InitDB():
                     c.iso = iso.lower()
                     if iso.lower() == Config.MAIN_CURRENCY:
                         c.default = True
-                    self.db.session.add(c)
+                    db.session.add(c)
                     cr = CurrencyRate()
                     cr.iso = iso.lower()
                     cr.date = datetime.date.today()
                     cr.rate = rate
 
-                    self.db.session.add(cr)
+                    db.session.add(cr)
         return self
 
     def do(self):
-        self.db.session.commit()
+        db.session.commit()

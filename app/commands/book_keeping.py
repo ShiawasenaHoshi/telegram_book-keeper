@@ -1,12 +1,12 @@
 import datetime
 
-from telebot.apihelper import ApiException, ApiTelegramException
+from telebot.apihelper import ApiTelegramException
 
+from app import db
 from app.api_client import ExchangeRates
 from app.charts import expenses_pie
 from app.commands.abstract import Cmd, input_method, bot_handler_dict
-from app.models import Transaction, Category, CurrencyRate, Currency, MonthStartBalance, default_dates, CAT_INCOME, \
-    Receipt
+from app.models import Transaction, Category, CurrencyRate, Currency, MonthStartBalance, default_dates, CAT_INCOME
 from app.user_models import ACCESS_LEVEL, User
 from app.report.generator import generate_report
 from config import Config
@@ -22,11 +22,6 @@ class BookKeepingCmd(Cmd):
         bot.add_message_handler(bot_handler_dict(self.delete_transaction, self.re_delete_transaction,
                                                   lambda msg: Cmd.is_allowed(msg,
                                                                              ACCESS_LEVEL.USER) and msg.reply_to_message))
-
-        bot.add_message_handler(bot_handler_dict(self.save_receipt, None,
-                                                 lambda msg: Cmd.is_allowed(msg,
-                                                                            ACCESS_LEVEL.USER) and msg.reply_to_message and (msg.document or msg.photo)))
-
 
     def edit_transaction(self, msg):
         amount, currency_iso, description = self.parse_tx_msg(msg)
@@ -56,28 +51,11 @@ class BookKeepingCmd(Cmd):
                 self.bot.reply_to(msg.reply_to_message, f"Запись уже удалена из базы ранее",
                                   reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
 
-    def save_receipt(self, msg):
-        with Cmd.ctx():
-            try:
-                r = Receipt.add_from_msg(self.l, self.bot, msg)
-                self.bot.reply_to(msg, f"Чек номер {r.file_number} добавлен к транзакции",
-                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
-            except ApiException as ae:
-                self.l.error(f'{ae}', exc_info=True)
-                if "file is too big" in ae.args[0]:
-                    self.bot.reply_to(msg, "Файл слишком большой",
-                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
-                else:
-                    raise ae
-            except BaseException as e:
-                self.l.error(f'{e}', exc_info=True)
-                self.bot.reply_to(msg, f"Файл не скачался. Причина: {e}",
-                                  reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
-
-
     def dict_of_methods(self):
         with Cmd.ctx():
-            cats = Category.query.order_by(Category.ui_order).all()
+            cats = db.session.execute(
+                db.select(Category).order_by(Category.ui_order)
+            ).scalars().all()
             result = {}
 
             def tx_lambda(cat_id):
@@ -102,24 +80,6 @@ class BookKeepingCmd(Cmd):
         with Cmd.ctx():
             Currency.set_default(iso)
         self.bot.reply_to(msg, f"{iso} теперь валюта по умолчанию",
-                          reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
-        self.l.info(f"Uid_{msg.from_user.id} has sended data: {msg.text}")
-
-    @input_method()
-    def waiting_for_data_currency_rate(self, msg):
-        data = msg.text.strip().split(" ")
-        iso = data[0]
-        rate = None
-        if len(data) == 2:
-            rate = float(data[1])
-        elif len(data) == 3:
-            rub = float(data[1])
-            currency = float(data[2])
-            rate = rub / currency
-
-        with Cmd.ctx():
-            CurrencyRate.set(iso, rate)
-        self.bot.reply_to(msg, f"Курс {iso} теперь {rate} руб. за единицу",
                           reply_markup=Cmd.get_markup_for_access_level(self.access_level_by_msg(msg)))
         self.l.info(f"Uid_{msg.from_user.id} has sended data: {msg.text}")
 
@@ -206,7 +166,7 @@ class BookKeepingCmd(Cmd):
                 if not iso:
                     iso = Currency.get_default()
                 rate = CurrencyRate.get(iso)
-                if not rate:
+                if rate is None:
                     rate = ExchangeRates.get(Config.MAIN_CURRENCY, iso)
                     CurrencyRate.set(iso, rate)
                     self.l.info(f"Today's {iso.upper()} rate set to {rate}")
@@ -215,7 +175,7 @@ class BookKeepingCmd(Cmd):
     def fetch_currencies_rates(self):
         with Cmd.ctx():
             for iso in Currency.get_all():
-                if not CurrencyRate.get(iso):
+                if CurrencyRate.get(iso) is None:
                     if iso == Config.MAIN_CURRENCY:
                         rate = 1
                     else:
@@ -279,7 +239,7 @@ class BookKeepingCmd(Cmd):
                 self.l.info("Sending last month's summary to all users")
                 last_month = datetime.date.today().replace(day=1) - datetime.timedelta(days=1)
                 from_date, to_date = default_dates(datetime.date(last_month.year, last_month.month, 1))
-                for u in User.query.all():
+                for u in db.session.execute(db.select(User)).scalars().all():
                     try:
                         self.bot.send_message(u.id, "ОТЧЕТ ЗА ПРОШЛЫЙ МЕСЯЦ")
                         self.summary(u.id, from_date, to_date)

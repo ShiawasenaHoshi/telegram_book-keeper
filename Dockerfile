@@ -1,10 +1,10 @@
-FROM python:3.8.20-slim-bookworm
+FROM python:3.12-alpine3.20
 
 COPY requirements.txt /tmp/
 COPY install-packages.sh /tmp/
 RUN /tmp/install-packages.sh
 
-RUN useradd --create-home bot
+RUN adduser -D bot
 WORKDIR /home/bot
 USER bot
 

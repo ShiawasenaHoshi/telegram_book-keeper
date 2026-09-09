@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from telebot import types
 
+from app import db
 from app.user_models import ACCESS_LEVEL, User
 
 
@@ -112,7 +113,7 @@ class Cmd():
 
     def access_level_by_uid(self, user_id):
         with Cmd.ctx():
-            user = User.query.filter_by(id=user_id).first()
+            user = db.session.get(User, user_id)
             return user.access_level
 
     def access_level_by_msg(self, msg):
@@ -126,7 +127,7 @@ class Cmd():
         if msg.from_user.id == int(Cmd.admin) and msg.text == f"/{Cmd.change_access_level_cmd}":
             return True
         with Cmd.ctx():
-            user = User.query.filter_by(id=msg.from_user.id).first()
+            user = db.session.get(User, msg.from_user.id)
             if user is None:
                 return False
             else:
