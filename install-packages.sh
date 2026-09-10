@@ -21,5 +21,5 @@ apk add --no-cache \
 
 apk upgrade --no-cache
 
-pip install --no-cache-dir -U pip
+pip install --no-cache-dir -U pip "setuptools>=78.1.1"
 pip install --no-cache-dir -r /tmp/requirements.txt

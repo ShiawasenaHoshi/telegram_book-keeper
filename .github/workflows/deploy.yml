@@ -59,7 +59,7 @@ jobs:
           tags: bot:scan
           cache-from: type=gha,scope=bot
           cache-to: type=gha,mode=max,scope=bot
-      - name: Trivy (HIGH/CRITICAL)
+      - name: Trivy gate (HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         env:
           TRIVY_SCANNERS: vuln
@@ -68,6 +68,20 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          format: table
+          trivyignores: .trivyignore
+
+      - name: Trivy SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        continue-on-error: true
+        env:
+          TRIVY_SCANNERS: vuln
+        with:
+          image-ref: bot:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
           format: sarif
           output: trivy.sarif
           trivyignores: .trivyignore
