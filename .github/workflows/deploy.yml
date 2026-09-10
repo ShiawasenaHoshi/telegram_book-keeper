@@ -24,6 +24,8 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       tag: ${{ steps.values.outputs.tag }}
       repo: ${{ steps.values.outputs.repo }}
