@@ -34,6 +34,7 @@ services:
       BOT_INTERVAL: "1"
       BOT_TIMEOUT: "3"
       MAIN_CURRENCY: eur
+      OFFLINE_RATES: "1"
       MPLBACKEND: Agg
     volumes:
       - ./test/e2e:/home/bot/e2e:ro

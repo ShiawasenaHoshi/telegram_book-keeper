@@ -22,7 +22,7 @@ _user_ids = itertools.count(900_101)
 # constructed, so an empty table leaves the keyboard pointing at nothing.
 # month_start_balance is written once at bot startup; truncating it makes a polling
 # restart broadcast to every user again.
-APPLICATION_TABLES = ('"transaction"', "receipt", '"user"')
+APPLICATION_TABLES = ('"transaction"', '"user"')
 
 
 def _truncate() -> None:

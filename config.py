@@ -1,6 +1,5 @@
 import os
 import tempfile
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -45,7 +44,5 @@ class Config(object):
     MAIN_CURRENCY = os.environ.get('MAIN_CURRENCY') or 'eur'
 
     TEMP_FOLDER = tempfile.gettempdir()
-
-    RECEIPTS_FOLDER = Path("receipts")
 
     CURRENCY_API_KEY = os.environ.get('CURRENCY_API_KEY')

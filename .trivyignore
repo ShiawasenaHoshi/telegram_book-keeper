@@ -1,0 +1,5 @@
+# Vendored msgpack inside pip; not used at application runtime.
+GHSA-6v7p-g79w-8964
+
+# Stale setuptools dist-info in python base image; upgraded in install-packages.sh.
+CVE-2025-47273

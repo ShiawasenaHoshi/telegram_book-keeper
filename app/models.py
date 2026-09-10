@@ -6,7 +6,6 @@ from sqlalchemy.sql import label
 
 from app import db
 from app.user_models import User
-from config import Config
 
 
 def default_dates(from_date=None, to_date=None):
@@ -365,92 +364,3 @@ class Category(db.Model):
     @staticmethod
     def get(id):
         return db.session.get(Category, id)
-
-
-class Receipt(db.Model):
-    tx_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), primary_key=True)
-    file_number = db.Column(db.SmallInteger, primary_key=True)
-    msg_id = db.Column(db.Integer, nullable=False)
-
-    __table_args__ = (
-        db.Index('ix_receipt_msg_id', msg_id),
-    )
-
-    def __init__(self, tx_id, msg_id, file_number):
-        self.tx_id = tx_id
-        self.file_number = file_number
-        self.msg_id = msg_id
-
-    def filename(self):
-        tx = db.session.get(Transaction, self.tx_id)
-        return Receipt._filename(tx.user_id, tx.message_id, self.file_number)
-
-    @staticmethod
-    def _filename(user_id, message_id, file_number):
-        return f"{user_id}_{message_id}_{file_number}"
-
-    @staticmethod
-    def add_from_msg(log, bot, msg):
-        tx_user_id = msg.reply_to_message.chat.id
-        tx_msg_id = msg.reply_to_message.id
-        image_msg_id = msg.id
-        tx = Transaction.get_by_msg(tx_user_id, tx_msg_id)
-        if tx:
-            if msg.document:
-                file_info = bot.get_file(msg.document.file_id)
-                original_file_name = msg.document.file_name
-            else:
-                file_info = bot.get_file(msg.photo[1].file_id)
-                original_file_name = file_info.file_path.replace("/", "_")
-            file_id = file_info.file_id
-            log.info(
-                '{0} {1} {2} downloading'.format(msg.message_id, file_id, original_file_name))
-
-            import pathlib
-            file_extension = pathlib.Path(file_info.file_path).suffix
-            file_number = Receipt.last_file_number(tx.id) + 1
-            file_name_with_extension = f"{Receipt._filename(tx.user_id, tx.msg_id, file_number)}{file_extension.lower()}"
-            downloaded_file = bot.download_file(file_info.file_path)
-            local_path = Config.RECEIPTS_FOLDER / file_name_with_extension
-            with open(local_path, 'w+b') as new_file:
-                new_file.write(downloaded_file)
-                r = Receipt.add(tx.id, image_msg_id, file_number)
-                log.info(f"{file_name_with_extension} saved")
-                return r
-        else:
-            raise Exception(f"Transaction {tx_msg_id} for uid {tx_user_id} does not exist")
-
-
-    @staticmethod
-    def add(tx_id, image_msg_id, file_number=None):
-        if not file_number:
-            last_number = Receipt.last_file_number(tx_id)
-            file_number = last_number + 1
-        r = Receipt(tx_id, image_msg_id, file_number)
-        db.session.add(r)
-        db.session.commit()
-        return r
-
-    @staticmethod
-    def last_file_number(tx_id):
-        receipts = Receipt.get_by_tx(tx_id)
-        if receipts:
-            return receipts[-1].file_number
-        else:
-            return 0
-
-    @staticmethod
-    def remove_all_by_tx(tx_id):
-        receipts = Receipt.get_by_tx(tx_id)
-        for receipt in receipts:
-            pass
-            #todo remove from storage
-            #todo remove from telegram
-        return db.session.filter(Receipt.tx_id == tx_id).delete()
-
-
-    @staticmethod
-    def get_by_tx(tx_id):
-        return db.session.execute(
-            db.select(Receipt).filter_by(tx_id=tx_id).order_by(Receipt.file_number)
-        ).scalars().all()
