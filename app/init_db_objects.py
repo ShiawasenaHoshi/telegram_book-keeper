@@ -1,4 +1,5 @@
 import datetime
+import os
 
 from app import db
 from app.models import Category, Currency, CurrencyRate
@@ -64,9 +65,13 @@ class InitDB():
             ExchangeRates.init("", Config.CURRENCY_API_KEY)
             ExchangeRates.get(Config.MAIN_CURRENCY, "usd")
             rates = ExchangeRates._instance.rates_cache.items()
-        else:
+        elif os.environ.get("OFFLINE_RATES") == "1":
             from app.reference_currency_data import REFERENCE_RATES
             rates = REFERENCE_RATES.items()
+        else:
+            raise RuntimeError(
+                "CURRENCY_API_KEY is not set and OFFLINE_RATES is not enabled"
+            )
         self._seed_currencies(rates)
         return self
 

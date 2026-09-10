@@ -20,7 +20,6 @@ def create_app(config_class=Config):
 
         db.init_app(app)
         migrate.init_app(app, db)
-        config_class.RECEIPTS_FOLDER.mkdir(parents=True, exist_ok=True)
         with app.app_context():
             if not config_class.DB_INTERACT and not config_class.TESTING :
                 from flask_migrate import upgrade as _upgrade
