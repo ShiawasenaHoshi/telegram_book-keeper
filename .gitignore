@@ -123,3 +123,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Local compose bind mount: Postgres data directory.
+# Contains a restored production database after local validation runs.
+postgres/
